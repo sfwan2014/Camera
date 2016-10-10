@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2B12353C1DAB442B004C3201 /* LightSettingView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B12353B1DAB442B004C3201 /* LightSettingView.m */; };
 		2B2F51831DA9DDEF0087E522 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B2F51821DA9DDEF0087E522 /* main.m */; };
 		2B2F51861DA9DDEF0087E522 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B2F51851DA9DDEF0087E522 /* AppDelegate.m */; };
 		2B2F51891DA9DDEF0087E522 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B2F51881DA9DDEF0087E522 /* ViewController.m */; };
@@ -39,6 +40,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2B12353A1DAB442B004C3201 /* LightSettingView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LightSettingView.h; sourceTree = "<group>"; };
+		2B12353B1DAB442B004C3201 /* LightSettingView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LightSettingView.m; sourceTree = "<group>"; };
 		2B2F517E1DA9DDEF0087E522 /* CameraDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B2F51821DA9DDEF0087E522 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		2B2F51841DA9DDEF0087E522 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
@@ -164,6 +167,8 @@
 				2B2F51B91DA9DE060087E522 /* CameraViewController.xib */,
 				2B2F51BA1DA9DE060087E522 /* SFCapture.h */,
 				2B2F51BB1DA9DE060087E522 /* SFCapture.m */,
+				2B12353A1DAB442B004C3201 /* LightSettingView.h */,
+				2B12353B1DAB442B004C3201 /* LightSettingView.m */,
 			);
 			name = camera;
 			path = ../../camera;
@@ -308,6 +313,7 @@
 			files = (
 				2B2F51BD1DA9DE060087E522 /* CameraViewController.m in Sources */,
 				2B2F51891DA9DDEF0087E522 /* ViewController.m in Sources */,
+				2B12353C1DAB442B004C3201 /* LightSettingView.m in Sources */,
 				2B2F51861DA9DDEF0087E522 /* AppDelegate.m in Sources */,
 				2B2F51BF1DA9DE060087E522 /* SFCapture.m in Sources */,
 				2B2F51831DA9DDEF0087E522 /* main.m in Sources */,

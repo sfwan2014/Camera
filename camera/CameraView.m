@@ -12,6 +12,7 @@
 @property (nonatomic, strong) UIImageView *readImageView;
 @property (nonatomic, strong) UIImageView *readLineView;
 @property (nonatomic, strong) SFCapture *capture;
+@property (nonatomic, strong) UIView *focusView;
 
 @end
 
@@ -46,35 +47,59 @@
 }
 
 - (void)commit
-{
+{ 
     self.capture = [[SFCapture alloc] init];
 //    self.capture.delegate = self;
 //    self.capture.camera = self.capture.back;
-//    self.capture.focusMode = AVCaptureFocusModeContinuousAutoFocus;
+    self.capture.focusMode = AVCaptureFocusModeContinuousAutoFocus;
 //    self.capture.rotation = 90.0f;
     self.capture.delegate = self;
     [self.layer addSublayer:self.capture.layer];
-    self.capture.layer.backgroundColor = [UIColor greenColor].CGColor;
-//    self.backgroundColor = [UIColor redColor];
+    
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapAction:)];
+    [self addGestureRecognizer:tap];
 }
 
 -(void)startRunning{
     [self.capture startRunning];
 }
+
 -(void)stopRunning{
     [self.capture stopRunning];
 }
-
+// 拍照
 -(void)captured{
     [self.capture captured];
 }
-
+// 重拍
 -(void)continueCapture{
     [self.capture continueCapture];
 }
 
+// 设置闪光灯模式
+-(void)settingTorchWithMode:(AVCaptureTorchMode)torchMode{
+    [self.capture settingTorchWithMode:torchMode];
+}
+// 切换前后摄像头
 -(BOOL)changeDevice:(AVCaptureDevicePosition)position{
-    return [self.capture configDevice:position];
+    return [self.capture changeDevice:position];
+}
+
+// 手动聚焦
+-(void)focusAtPoint:(CGPoint)point{
+    //实例化
+    AVCaptureDevice  *captureDevice = self.capture.device;
+    //先进行判断是否支持控制对焦
+    if (captureDevice.isFocusPointOfInterestSupported && [captureDevice isFocusModeSupported:AVCaptureFocusModeAutoFocus]) {
+        
+        NSError *error = nil;
+        //对cameraDevice进行操作前，需要先锁定，防止其他线程访问，
+        [self.capture.device lockForConfiguration:&error];
+        [self.capture.device setFocusMode:AVCaptureFocusModeAutoFocus];
+        [self.capture.device setFocusPointOfInterest:CGPointMake(point.x,point.y)];
+        //操作完成后，记得进行unlock。
+        [self.capture.device unlockForConfiguration];
+    }
 }
 
 - (void)drawRect:(CGRect)rect
@@ -131,12 +156,43 @@
     
 }
 
-
+#pragma mark - action
+-(void)tapAction:(UITapGestureRecognizer *)tap{
+    
+    CGPoint point = [tap locationInView:self];
+    
+    CGPoint p = CGPointMake(point.x/self.frame.size.width, point.y/self.frame.size.height);
+    
+    [self focusAtPoint:p];
+    
+    
+    self.focusView.frame = CGRectMake(0,0, 100, 100);
+    self.focusView.center = point;
+    [UIView animateWithDuration:0.35 animations:^{
+        self.focusView.frame = CGRectMake(0,0, 50, 50);
+        self.focusView.center = point;
+    }];
+}
 
 - (void)dealloc
 {
     self.capture = nil;
     NSLog(@"CameraView dealloc");
+}
+
+
+#pragma mark -- getter
+-(UIView *)focusView{
+    if (_focusView == nil) {
+        UIView *focusView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 50, 50)];
+        focusView.layer.masksToBounds = YES;
+        focusView.layer.borderColor = [UIColor colorWithRed:0.5 green:0.9 blue:0.5 alpha:1].CGColor;
+        focusView.layer.borderWidth = 0.5;
+        focusView.backgroundColor = [UIColor clearColor];
+        [self addSubview:focusView];
+        _focusView = focusView;
+    }
+    return _focusView;
 }
 
 @end

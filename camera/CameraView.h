@@ -20,4 +20,6 @@
 -(void)captured;
 
 -(BOOL)changeDevice:(AVCaptureDevicePosition)position;
+// 设置闪光灯模式
+-(void)settingTorchWithMode:(AVCaptureTorchMode)torchMode;
 @end

@@ -7,17 +7,20 @@
 //
 
 #import "SFCapture.h"
+#import <ImageIO/ImageIO.h>
 
 @interface SFCapture ()<AVCaptureVideoDataOutputSampleBufferDelegate>
 @property (nonatomic, strong) AVCaptureDevice *device;
 @property (nonatomic, strong) AVCaptureDeviceInput *currentInput;
 @property (nonatomic, strong) AVCaptureDeviceInput *originInput;
 
-@property (nonatomic, strong) AVCaptureVideoDataOutput *output;
+@property (nonatomic, strong) AVCaptureOutput *output;
 
 @property (nonatomic, strong) AVCaptureSession *session;
 
 @property (nonatomic, strong) AVCaptureVideoPreviewLayer *layer;
+
+@property (nonatomic, assign) AVCaptureTorchMode torchMode; // 闪光灯模式
 
 @end
 
@@ -34,65 +37,59 @@
 
 -(void)commit{
     
-    [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
-        if (!granted) {
-            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:nil message:@"请到设置中允许使用摄像头功能" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil, nil];
-            [alert show];
-            return ;
-        }
-        
-        [self configDevice:AVCaptureDevicePositionBack];
-    }];
-}
-
--(AVCaptureSession *)session{
-    if (_session == nil) {
-        _session = [[AVCaptureSession alloc] init];
-    }
-    return _session;
-}
-
-- (AVCaptureVideoPreviewLayer *)layer {
-    AVCaptureVideoPreviewLayer *layer = (AVCaptureVideoPreviewLayer *)_layer;
-    if (!_layer) {
-        if (![[NSThread currentThread] isMainThread]) {
-            NSLog(@"不是主线程");
-        }
-        layer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.session];
-//        layer.affineTransform = self.transform;
-//        layer.delegate = self;
-        layer.videoGravity = AVLayerVideoGravityResizeAspect;
-        layer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-        CGRect layerRect = CGRectMake(0, 0, kScreenWidth, kScreenHeight);
-        [layer setBounds:layerRect];
-        [layer setPosition:CGPointMake(CGRectGetMidX(layerRect),CGRectGetMidY(layerRect))];
-        _layer = layer;
-    }
-    return layer;
-}
-
--(AVCaptureDevice *)cameraWithPosition:(AVCaptureDevicePosition)position{
-    NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
-    for (AVCaptureDevice *device in devices) {
-        if ([device hasMediaType:AVMediaTypeVideo]) {
-            if ([device position] == position) {
-                AVCaptureDeviceFormat *format = [device activeFormat];
-                NSArray *ranges = [format videoSupportedFrameRateRanges];
-                AVFrameRateRange *range = [ranges firstObject];
-                
-                NSError *error = nil;
-                [device lockForConfiguration:&error];
-                if (error) {
-                    NSLog(@"lockForConfiguration error :%@", error);
+    AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+    switch (authStatus) {
+        case AVAuthorizationStatusNotDetermined:
+        {
+            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+                if (!granted) {
+                    UIAlertView *alert = [[UIAlertView alloc] initWithTitle:nil message:@"请到设置中允许使用摄像头功能" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil, nil];
+                    [alert show];
+                    return ;
                 }
                 
-                [device setActiveVideoMinFrameDuration:range.minFrameDuration];
-                [device setActiveVideoMaxFrameDuration:range.maxFrameDuration];
-                return device;
-            }
+                [self openDefaultDevice];
+                
+                [self startRunning];
+            }];
         }
+            break;
+        case AVAuthorizationStatusRestricted:
+        {
+            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:nil message:@"请确定你的设备是否被进行家长控制" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil, nil];
+            [alert show];
+        }
+            break;
+        case AVAuthorizationStatusDenied:
+        {
+                UIAlertView *alert = [[UIAlertView alloc] initWithTitle:nil message:@"请到设置中允许使用摄像头功能" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil, nil];
+                [alert show];
+        }
+            break;
+        case AVAuthorizationStatusAuthorized:
+        {
+            [self openDefaultDevice];
+        }
+            break;
+            
+        default:
+            break;
     }
-    return nil;
+}
+
+// 打开默认的摄像头  后置摄像头
+-(void)openDefaultDevice{
+    BOOL res = [self configDevice:AVCaptureDevicePositionBack];
+    if (res) {
+        // 默认闪光灯自动模式
+        [self settingTorchWithMode:AVCaptureTorchModeAuto];
+        
+        [self configDeviceInput];
+        
+        [self configDefaultOutput];
+        
+        [self configCaptureSession];
+    }
 }
 
 -(BOOL)configDevice:(AVCaptureDevicePosition)position{
@@ -104,11 +101,65 @@
         NSLog(@"无摄像头");
         return NO;
     }
+    
+    return YES;
+}
+// 打开摄像头
+-(void)settingTorchWithMode:(AVCaptureTorchMode)torchMode{
+    
+    AVCaptureFlashMode flashMode = AVCaptureFlashModeOff;
+    switch (torchMode) {
+        case AVCaptureTorchModeOff:
+        {
+            flashMode = AVCaptureFlashModeOff;
+        }
+            break;
+        case AVCaptureTorchModeOn:
+        {
+            flashMode = AVCaptureFlashModeOn;
+        }
+            break;
+        case AVCaptureTorchModeAuto:
+        {
+            flashMode = AVCaptureFlashModeAuto;
+        }
+            break;
+            
+        default:
+            break;
+    }
+    
+    _torchMode = torchMode;
+    
+    Class captureDeviceClass = NSClassFromString(@"AVCaptureDevice");
+    if (captureDeviceClass != nil) {
+        AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+        if ([device hasTorch] && [device hasFlash]){
+            
+            [device lockForConfiguration:nil];
+            [device setTorchMode:torchMode];
+            [device setFlashMode:flashMode];
+            [device unlockForConfiguration];
+        }
+    }
+}
+
+-(BOOL)changeDevice:(AVCaptureDevicePosition)position{
+    self.device = nil;
+    self.device = [self cameraWithPosition:position];
+    if (!self.device) {
+        // 无摄像头
+        NSLog(@"无摄像头");
+        return NO;
+    }
+    
     [self configDeviceInput];
+    
+    [self configCaptureSession];
     return YES;
 }
 
--(void)configDeviceInput
+-(BOOL)configDeviceInput
 {
     NSError *error = nil;
     self.originInput = self.currentInput;
@@ -116,19 +167,15 @@
     if (error) {
         // 调用摄像头失败
         NSLog(@"调用摄像头失败");
-        return;
+        return NO;
     }
-    
-    [self configCaptureSession];
-    
-    [self configOutput];
+    return YES;
 }
 
 -(void)configCaptureSession{
     
     [self.session beginConfiguration];
     if (self.originInput != nil) {
-        
         [self.session removeInput:self.originInput];
     }
     
@@ -139,42 +186,93 @@
         NSLog(@" 添加输入接口失败 ");
     }
     
+    if ([self.session canAddOutput:self.output]) {
+        [self.session addOutput:self.output];
+    } else {
+        NSLog(@" 添加输出接口失败 ");
+    }
+    
     [self.session commitConfiguration];
 }
 
--(void)configOutput{
-    if (self.output == nil) {
-        self.output = [[AVCaptureVideoDataOutput alloc] init];
-        self.output.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
-//        self.output.minFrameDuration = CMTimeMake(1, 15);
-//        dispatch_queue_t queue = dispatch_queue_create("MyCameraQueue", NULL);
+-(AVCaptureOutput *)outputWithFunctionType:(SFCaptureFunctionType)type{
+    AVCaptureOutput * output = nil;
+    if (type == SFCapturePhotoFunctionType) {
+        AVCaptureStillImageOutput *newOutput = [[AVCaptureStillImageOutput alloc] init];
+        NSDictionary *myOutputSettings = [[NSDictionary alloc] initWithObjectsAndKeys:AVVideoCodecJPEG,AVVideoCodecKey,nil];
+        [newOutput setOutputSettings:myOutputSettings];
         
-        dispatch_queue_t queue = dispatch_get_global_queue(0, DISPATCH_QUEUE_PRIORITY_DEFAULT);
-        
-        [self.output setSampleBufferDelegate:self queue:queue];
-        
-        
-        if ([self.session canAddOutput:self.output]) {
-            [self.session addOutput:self.output];
-        } else {
-            NSLog(@" 添加输出接口失败 ");
-        }
-        
-        [self startRunning];
+        output = newOutput;
+    } else {
+        AVCaptureVideoDataOutput *newOutput = [[AVCaptureVideoDataOutput alloc] init];
+        newOutput.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
+        dispatch_queue_t queue = dispatch_queue_create("MyCameraQueue", NULL);
+        [newOutput setSampleBufferDelegate:self queue:queue];
+        output = newOutput;
     }
-    
+    return output;
+}
+// 配置默认输出  照相机
+-(void)configDefaultOutput{
+    self.output = [self outputWithFunctionType:SFCapturePhotoFunctionType];
+}
+// 重置输出  照相 或者 录视频
+-(void)resetOutputWithFunctionType:(SFCaptureFunctionType)type{
+    self.output = [self outputWithFunctionType:type];
 }
 
 -(void)startRunning{
-    [self.session startRunning];
+    if (![self.session isRunning]) {
+        [self.session startRunning];
+    }
 }
 
 -(void)stopRunning{
-    [self.session stopRunning];
+    if ([self.session isRunning]) {
+        [self.session stopRunning];
+    }
 }
 
 -(void)captured{
     [[self.layer connection] setEnabled:NO];
+    
+    AVCaptureConnection *myVideoConnection = nil;
+    
+    //从 AVCaptureStillImageOutput 中取得正确类型的 AVCaptureConnection
+    AVCaptureStillImageOutput *myStillImageOutput = (AVCaptureStillImageOutput *)self.output;
+    for (AVCaptureConnection *connection in myStillImageOutput.connections) {
+        for (AVCaptureInputPort *port in [connection inputPorts]) {
+            if ([[port mediaType] isEqual:AVMediaTypeVideo]) {
+                
+                myVideoConnection = connection;
+                break;
+            }
+        }
+    }
+    
+    //撷取影像（包含拍照音效）
+    [myStillImageOutput captureStillImageAsynchronouslyFromConnection:myVideoConnection completionHandler:^(CMSampleBufferRef imageDataSampleBuffer, NSError *error) {
+        
+        //完成撷取时的处理程序(Block)
+        if (imageDataSampleBuffer) {
+            NSData *imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:imageDataSampleBuffer];
+            
+            //取得的静态影像
+            UIImage *image = [[UIImage alloc] initWithData:imageData];
+            if (self.block) {
+                self.block(image);
+            }
+            if ([self.delegate respondsToSelector:@selector(capture:reslut:)]) {
+                [self.delegate capture:self reslut:image];
+            }
+
+            //取得影像数据（需要ImageIO.framework 与 CoreMedia.framework）
+            CFDictionaryRef myAttachments = CMGetAttachment(imageDataSampleBuffer, kCGImagePropertyExifDictionary, NULL);
+            
+            NSLog(@"影像属性: %@", myAttachments);
+            
+        }
+    }];
 }
 
 -(void)continueCapture{
@@ -183,14 +281,17 @@
 
 #pragma mark - -AVCaptureVideoDataOutputSampleBufferDelegate
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection{
-    UIImage *image = [self imageFromSampleBuffer:sampleBuffer];
-    if (self.block) {
-        self.block(image);
-    }
     
-    if ([self.delegate respondsToSelector:@selector(capture:reslut:)]) {
-        [self.delegate capture:self reslut:image];
-    }
+    // 视频采样
+    
+//    UIImage *image = [self imageFromSampleBuffer:sampleBuffer];
+//    if (self.block) {
+//        self.block(image);
+//    }
+//    
+//    if ([self.delegate respondsToSelector:@selector(capture:reslut:)]) {
+//        [self.delegate capture:self reslut:image];
+//    }
 }
 
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didDropSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection {
@@ -316,6 +417,82 @@
     self.output = nil;
     
     NSLog(@"SFCapture dealloc");
+}
+
+
+
+
+
+
+#pragma mark - setter
+-(void)setFunctionType:(SFCaptureFunctionType)functionType{
+    _functionType = functionType;
+}
+
+-(void)setFocusMode:(AVCaptureFocusMode)focusMode{
+    NSError *error = nil;
+    [self.device lockForConfiguration:&error];
+    if (error) {
+        NSLog(@"lockForConfiguration error :%@", error);
+        return;
+    }
+    
+    [self.device setFocusMode:focusMode];
+    _focusMode = focusMode;
+    [self.device unlockForConfiguration];
+}
+
+
+#pragma mark - getter
+-(AVCaptureSession *)session{
+    if (_session == nil) {
+        _session = [[AVCaptureSession alloc] init];
+    }
+    return _session;
+}
+
+- (AVCaptureVideoPreviewLayer *)layer {
+    AVCaptureVideoPreviewLayer *layer = (AVCaptureVideoPreviewLayer *)_layer;
+    if (!_layer) {
+        if (![[NSThread currentThread] isMainThread]) {
+            NSLog(@"不是主线程");
+        }
+        layer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.session];
+        //        layer.affineTransform = self.transform;
+        //        layer.delegate = self;
+        layer.videoGravity = AVLayerVideoGravityResizeAspect;
+        layer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+        CGRect layerRect = CGRectMake(0, 0, kScreenWidth, kScreenHeight);
+        [layer setBounds:layerRect];
+        [layer setPosition:CGPointMake(CGRectGetMidX(layerRect),CGRectGetMidY(layerRect))];
+        _layer = layer;
+    }
+    return layer;
+}
+
+-(AVCaptureDevice *)cameraWithPosition:(AVCaptureDevicePosition)position{
+    NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+    for (AVCaptureDevice *device in devices) {
+        if ([device hasMediaType:AVMediaTypeVideo]) {
+            if ([device position] == position) {
+                AVCaptureDeviceFormat *format = [device activeFormat];
+                NSArray *ranges = [format videoSupportedFrameRateRanges];
+                AVFrameRateRange *range = [ranges firstObject];
+                
+                NSError *error = nil;
+                [device lockForConfiguration:&error];
+                if (error) {
+                    NSLog(@"lockForConfiguration error :%@", error);
+                }
+                
+                [device setActiveVideoMinFrameDuration:range.minFrameDuration];
+                [device setActiveVideoMaxFrameDuration:range.maxFrameDuration];
+                [device unlockForConfiguration];
+                return device;
+            }
+        }
+    }
+    return nil;
 }
 
 @end

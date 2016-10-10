@@ -7,6 +7,12 @@
 //
 
 #import <Foundation/Foundation.h>
+
+typedef enum : NSUInteger {
+    SFCapturePhotoFunctionType = 0, // 相机
+    SFCaptureVideoFunctionType, // 摄像头
+} SFCaptureFunctionType;
+
 @class SFCapture;
 typedef void (^CaptureBlock)(id result);
 
@@ -21,10 +27,18 @@ typedef void (^CaptureBlock)(id result);
 @property (nonatomic, strong, readonly) AVCaptureVideoPreviewLayer *layer;
 
 @property (nonatomic, assign) id<CaptureDelegate> delegate;
+@property (nonatomic, assign) SFCaptureFunctionType functionType;
+@property (nonatomic, assign,readonly) AVCaptureTorchMode torchMode; // 闪光灯模式
+@property (nonatomic, assign) AVCaptureFocusMode focusMode;
+@property (nonatomic, strong,readonly) AVCaptureDevice *device; // 设备
+// 设置闪光灯模式
+-(void)settingTorchWithMode:(AVCaptureTorchMode)torchMode;
 
 @property (nonatomic, copy) CaptureBlock block;
 
--(BOOL)configDevice:(AVCaptureDevicePosition)position;
+//-(BOOL)configDevice:(AVCaptureDevicePosition)position;
+-(BOOL)changeDevice:(AVCaptureDevicePosition)position;
+
 // 开始运行
 -(void)stopRunning;
 // 停止运行
