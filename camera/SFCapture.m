@@ -233,51 +233,6 @@
     }
 }
 
--(void)captured{
-    [[self.layer connection] setEnabled:NO];
-    
-    AVCaptureConnection *myVideoConnection = nil;
-    
-    //从 AVCaptureStillImageOutput 中取得正确类型的 AVCaptureConnection
-    AVCaptureStillImageOutput *myStillImageOutput = (AVCaptureStillImageOutput *)self.output;
-    for (AVCaptureConnection *connection in myStillImageOutput.connections) {
-        for (AVCaptureInputPort *port in [connection inputPorts]) {
-            if ([[port mediaType] isEqual:AVMediaTypeVideo]) {
-                
-                myVideoConnection = connection;
-                break;
-            }
-        }
-    }
-    
-    //撷取影像（包含拍照音效）
-    [myStillImageOutput captureStillImageAsynchronouslyFromConnection:myVideoConnection completionHandler:^(CMSampleBufferRef imageDataSampleBuffer, NSError *error) {
-        
-        //完成撷取时的处理程序(Block)
-        if (imageDataSampleBuffer) {
-            NSData *imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:imageDataSampleBuffer];
-            
-            //取得的静态影像
-            UIImage *image = [[UIImage alloc] initWithData:imageData];
-            if (self.block) {
-                self.block(image);
-            }
-            if ([self.delegate respondsToSelector:@selector(capture:reslut:)]) {
-                [self.delegate capture:self reslut:image];
-            }
-
-            //取得影像数据（需要ImageIO.framework 与 CoreMedia.framework）
-            CFDictionaryRef myAttachments = CMGetAttachment(imageDataSampleBuffer, kCGImagePropertyExifDictionary, NULL);
-            
-            NSLog(@"影像属性: %@", myAttachments);
-            
-        }
-    }];
-}
-
--(void)continueCapture{
-    [[self.layer connection] setEnabled:YES];
-}
 
 #pragma mark - -AVCaptureVideoDataOutputSampleBufferDelegate
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection{
@@ -462,7 +417,7 @@
         //        layer.delegate = self;
         layer.videoGravity = AVLayerVideoGravityResizeAspect;
         layer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-        CGRect layerRect = CGRectMake(0, 0, kScreenWidth, kScreenHeight);
+        CGRect layerRect = CGRectMake(0, 0, screenWidth, screenHeight);
         [layer setBounds:layerRect];
         [layer setPosition:CGPointMake(CGRectGetMidX(layerRect),CGRectGetMidY(layerRect))];
         _layer = layer;

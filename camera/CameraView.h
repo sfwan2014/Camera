@@ -7,8 +7,21 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "SFCaptureHeader.h"
+
+typedef void (^CameraBlock)(id result);
+
+@class CameraView;
+@protocol CameraDelegate <NSObject>
+
+-(void)camera:(CameraView *)camera reslut:(id)data;
+
+@end
 
 @interface CameraView : UIView
+@property (nonatomic, copy) CameraBlock block;
+@property (nonatomic, assign) id<CameraDelegate> delegate;
+
 // 开始运行
 -(void)stopRunning;
 // 停止运行

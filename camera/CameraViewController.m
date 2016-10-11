@@ -9,8 +9,9 @@
 #import "CameraViewController.h"
 #import "CameraView.h"
 #import "LightSettingView.h"
+#import "MLImageCrop.h"
 
-@interface CameraViewController ()<LightSettingDelegate>
+@interface CameraViewController ()<LightSettingDelegate, CameraDelegate, MLImageCropDelegate>
 @property (nonatomic, strong) CameraView *camera;
 
 @property (nonatomic, strong) UIButton *changeDeviceButton; // 切换摄像头
@@ -18,15 +19,21 @@
 @property (nonatomic, strong) UIButton *restartButton; // 重拍
 @property (nonatomic, strong) UIButton *captureButton; // 拍照
 @property (nonatomic, strong) UIButton *confirmButton; // 确认按钮
+
+@property (nonatomic, strong) UIImage *image;
 @end
 
 @implementation CameraViewController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    _ratioOfWidthAndHeight = 1.0;
+    
     // Do any additional setup after loading the view from its nib.
-    self.camera = [[CameraView alloc] initWithFrame:CGRectMake(0, 0, kScreenWidth, kScreenHeight)];
+    self.camera = [[CameraView alloc] initWithFrame:CGRectMake(0, 0, screenWidth, screenHeight)];
     [self.view addSubview:self.camera];
+    self.camera.delegate = self;
     
     CGFloat left = 12;
     
@@ -38,7 +45,7 @@
     [self.view addSubview:button];
     
     button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.frame = CGRectMake(kScreenWidth - 80 - 10, 20, 80, 50);
+    button.frame = CGRectMake(screenWidth - 80 - 10, 20, 80, 50);
     [button setTitle:@"前置镜头" forState:UIControlStateNormal];
     [button setTitle:@"后置镜头" forState:UIControlStateSelected];
     [button addTarget:self action:@selector(changeAction:) forControlEvents:UIControlEventTouchUpInside];
@@ -47,14 +54,14 @@
     
     
     button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.frame = CGRectMake((kScreenWidth - 50)/2.0, kScreenHeight - 50 - 10, 50, 50);
+    button.frame = CGRectMake((screenWidth - 50)/2.0, screenHeight - 50 - 10, 50, 50);
     [button setTitle:@"拍摄" forState:UIControlStateNormal];
     [button addTarget:self action:@selector(captureAction:) forControlEvents:UIControlEventTouchUpInside];
     self.captureButton = button;
     [self.view addSubview:button];
     
     button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.frame = CGRectMake(left, kScreenHeight - 50 - 10, 50, 50);
+    button.frame = CGRectMake(left, screenHeight - 50 - 10, 50, 50);
     [button setTitle:@"重拍" forState:UIControlStateNormal];
     [button setTitle:@"返回" forState:UIControlStateSelected];
     button.selected = YES;
@@ -63,7 +70,7 @@
     [self.view addSubview:button];
     
     button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.frame = CGRectMake((kScreenWidth - 50-24), kScreenHeight - 50 - 10, 50, 50);
+    button.frame = CGRectMake((screenWidth - 50-24), screenHeight - 50 - 10, 50, 50);
     [button setTitle:@"确定" forState:UIControlStateNormal];
     [button addTarget:self action:@selector(confirmAction:) forControlEvents:UIControlEventTouchUpInside];
     self.confirmButton = button;
@@ -119,15 +126,18 @@
     self.confirmButton.hidden = YES;
     self.captureButton.hidden = NO;
     self.lightButton.hidden = NO;
-    if (button.selected) {
-        [self backAction];
+    if (!button.selected) {
+        self.restartButton.selected = YES;
+        return;
     }
-    
-    button.selected = YES;
+    [self backAction];
 }
 
 -(void)confirmAction:(UIButton *)button{
-    
+    if ([self.delegate respondsToSelector:@selector(cameraCapture:didFinishCaptureImage:)]) {
+        [self.delegate cameraCapture:self didFinishCaptureImage:self.image];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 -(void)viewWillAppear:(BOOL)animated{
@@ -181,6 +191,46 @@
     }
     
     [self.camera settingTorchWithMode:torchMode];
+}
+
+
+#pragma mark - CameraDelegate
+-(void)camera:(CameraView *)camera reslut:(id)data{
+    self.image = data;
+    if (self.canEdit) {// 去编辑
+        [self cropImage:data withRequester:self];
+        return;
+    }
+}
+
+#pragma mark - MLImageCropDelegate
+-(void)cropImageController:(MLImageCrop *)controller requester:(UIViewController *)requester didFinishCropImage:(UIImage *)cropImage originalImage:(UIImage *)originalImage{
+    
+    [requester dismissViewControllerAnimated:NO completion:^{
+        [controller dismissCropImageViewControllerAnimated:YES];
+    }];
+    
+    if ([self.delegate respondsToSelector:@selector(cameraCapture:didFinishCaptureImage:)]) {
+        [self.delegate cameraCapture:self didFinishCaptureImage:cropImage];
+    }
+}
+
+-(void)cropImageController:(MLImageCrop *)controller didCancelCropImageWithRequester:(CameraViewController *)requester{
+    [requester restartAction:nil];
+    [controller dismissCropImageViewControllerAnimated:YES];
+}
+
+- (void)cropImage:(UIImage *)image withRequester:(CameraViewController *)requester {
+    MLImageCrop *imageCrop = [[MLImageCrop alloc]initWithRequester:requester];
+    imageCrop.delegate = self;
+    //    imageCrop.image = [self fixOrientation:image];
+    
+    imageCrop.image = image;
+    if (_ratioOfWidthAndHeight <= 0) {
+        _ratioOfWidthAndHeight = 1;
+    }
+    imageCrop.ratioOfWidthAndHeight = _ratioOfWidthAndHeight;
+    [imageCrop presentCropImageViewControllerWithAnimation:YES];
 }
 
 
